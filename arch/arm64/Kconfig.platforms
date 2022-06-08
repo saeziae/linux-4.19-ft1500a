@@ -254,6 +254,11 @@ config ARCH_SPRD
 	help
 	  Support for Spreadtrum ARM based SoCs
 
+config ARCH_PHYTIUM
+	bool "Phytium FT SoC Family"
+	help
+	  This enables support for Phytium FT SoC Family. Now only FT1500a/4 is tested.
+
 config ARCH_THUNDER
 	bool "Cavium Inc. Thunder SoC Family"
 	help
