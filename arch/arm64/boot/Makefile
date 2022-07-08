@@ -18,6 +18,9 @@ OBJCOPYFLAGS_Image :=-O binary -R .note -R .note.gnu.build-id -R .comment -S
 
 targets := Image Image.bz2 Image.gz Image.lz4 Image.lzma Image.lzo
 
+$(obj)/uImage: $(obj)/Image FORCE
+	mkimage -A arm64 -O linux -T kernel -a 0x80080000 -e 0x80080000 -d Image uImage
+
 $(obj)/Image: vmlinux FORCE
 	$(call if_changed,objcopy)
 

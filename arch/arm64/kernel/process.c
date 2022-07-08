@@ -522,6 +522,162 @@ unsigned long arch_randomize_brk(struct mm_struct *mm)
 		return randomize_page(mm->brk, SZ_1G);
 }
 
+/*patch_for_ft1500a_2017011802_poweroff_by_gpio*/
+struct ft1500a_gpio {
+	int 		size;
+	unsigned int 	padd;
+	void __iomem 	*vadd;
+}; 
+
+static struct ft1500a_gpio ft1500a_gpio = {
+	.size = 0x80,		/* size of gpio*/
+	.padd = 0x28006000,     /* physize address of gpio*/
+	.vadd = NULL,		/* virtual address of gpio*/
+};
+
+#define FT1500A_GPIOREG_W(value,reg)	writel((value), ft1500a_gpio.vadd + (reg))
+#define FT1500A_GPIOREG_R(reg)		readl(ft1500a_gpio.vadd + (reg))
+
+#define GET_PORT(bit)		(bit>>3)
+#define GET_OUTPUT_REG(bit) 	(GET_PORT(bit)*0xc)
+#define GET_IO_CTRL_REG(bit) 	(GET_PORT(bit)*0xc+0x4)
+#define GET_SH_CTRL_REG(bit)	(GET_PORT(bit)*0xc+0x8)
+#define GET_BIT_MASK(bit) 	(1<<(bit&0x7))
+
+static inline void ft1500a_set_outputs(int bit0, int bit1)
+{
+	u32 tmp, reg;
+	if(GET_PORT(bit0)!=GET_PORT(bit1)){
+		/*do nothing*/
+		return ;
+	}
+	/* output mode*/
+	reg = GET_IO_CTRL_REG(bit0);
+	tmp = FT1500A_GPIOREG_R(reg);
+	tmp|= (GET_BIT_MASK(bit0)|GET_BIT_MASK(bit1));
+	FT1500A_GPIOREG_W(tmp, reg);
+	/* software mode*/
+	reg = GET_SH_CTRL_REG(bit0);
+	tmp = FT1500A_GPIOREG_R(reg);
+	tmp &= ~(GET_BIT_MASK(bit0)|GET_BIT_MASK(bit1));
+	FT1500A_GPIOREG_W(tmp, reg); 	
+}
+
+static inline void ft1500a_set_inputs(int bit0, int bit1)
+{
+	u32 tmp, reg;
+	if(GET_PORT(bit0)!=GET_PORT(bit1)){
+		/*do nothing*/
+		return ;
+	}
+	/* input mode*/
+	reg = GET_IO_CTRL_REG(bit0);
+	tmp = FT1500A_GPIOREG_R(reg);
+	tmp&= ~(GET_BIT_MASK(bit0)|GET_BIT_MASK(bit1));
+	FT1500A_GPIOREG_W(tmp, reg);
+	/* hardware mode*/
+	reg = GET_SH_CTRL_REG(bit0);
+	tmp = FT1500A_GPIOREG_R(reg);
+	tmp |= GET_BIT_MASK(bit0)|GET_BIT_MASK(bit1);
+	FT1500A_GPIOREG_W(tmp, reg); 	
+	
+}
+
+static inline void ft1500a_output_bits(int bit0, int bit1, int value0, int value1)
+{
+	u32 tmp, reg;
+	if(GET_PORT(bit0)!=GET_PORT(bit1)){
+		/*do nothing*/
+		return ;
+	}
+	/* input mode*/
+	reg = GET_OUTPUT_REG(bit0);
+	tmp = FT1500A_GPIOREG_R(reg);
+	if(value0)
+		tmp|= GET_BIT_MASK(bit0);
+	else
+		tmp&= ~GET_BIT_MASK(bit0);
+	if(value1)
+		tmp|= GET_BIT_MASK(bit1);
+	else
+		tmp&= ~GET_BIT_MASK(bit1);
+	FT1500A_GPIOREG_W(tmp, reg);
+
+}
+	
+static inline void ft1500a_delay(int d)
+{
+	int i,j,ret;
+	for(i=0;i<d;i++){
+		ret = 0;
+		for(j=0;i<9999999;i++)
+			ret += j;
+	}
+	
+}
+
+static void ft1500a_restart(enum reboot_mode reboot_mode, const char *cmd)
+{
+	int cpu = smp_processor_id();
+	printk("CPU[%d]: retstart...\n",cpu);
+
+	ft1500a_delay(1000);
+	ft1500a_output_bits(13,14,1,1);
+	ft1500a_set_outputs(13,14);
+	ft1500a_output_bits(13,14,1,1);
+	ft1500a_delay(1000);
+	ft1500a_output_bits(13,14,0,1);
+	while(1);	
+
+}
+
+static void ft1500a_poweroff(void)
+{
+	int cpu = smp_processor_id();
+	printk("CPU[%d]: poweroff...\n",cpu);
+
+	ft1500a_delay(1000);
+	ft1500a_output_bits(13,14,1,1);
+	ft1500a_set_outputs(13,14);
+	ft1500a_output_bits(13,14,1,1);
+	ft1500a_delay(1000);
+	ft1500a_output_bits(13,14,1,0);
+	while(1);	
+
+}
+#if 0
+static void ft1500a_power_off_prepare(void)
+{
+	int cpu = smp_processor_id();
+	printk("CPU[%d]: power_off_prepare...\n",cpu);	
+}
+#endif
+	
+static int ft1500a_poweroff_init(void)
+{
+
+	
+    	int ret = 0;
+
+	ft1500a_gpio.vadd = ioremap(ft1500a_gpio.padd, ft1500a_gpio.size);
+	if (!ft1500a_gpio.vadd){
+		printk("[ERROR]: gpio ioremap\n");
+		ret = -ENOMEM;
+		goto fail0;
+	}
+
+	ft1500a_set_inputs(13, 14);
+
+	pm_power_off = ft1500a_poweroff;
+//	pm_power_off_prepare = ft1500a_power_off_prepare;
+	arm_pm_restart = ft1500a_restart;
+	printk("[INFO]: poweroff init\n");	
+fail0:
+	return ret;
+}
+
+arch_initcall(ft1500a_poweroff_init);
+
 /*
  * Called from setup_new_exec() after (COMPAT_)SET_PERSONALITY.
  */
