@@ -227,8 +227,8 @@ void __init of_core_init(void)
 
 	/* Create the kset, and register existing nodes */
 	mutex_lock(&of_mutex);
-	of_kset = kset_create_and_add("devicetree", NULL, firmware_kobj);
 	/*
+	of_kset = kset_create_and_add("devicetree", NULL, firmware_kobj);
 	if (!of_kset) {
 		mutex_unlock(&of_mutex);
 		pr_err("failed to register existing nodes\n");
@@ -243,8 +243,8 @@ void __init of_core_init(void)
 	/*
 	if (of_root)
 		proc_symlink("device-tree", NULL, "/sys/firmware/devicetree/base");
+	*/
 }
-*/
 
 static struct property *__of_find_property(const struct device_node *np,
 					   const char *name, int *lenp)
